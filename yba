@@ -1,0 +1,320 @@
+-- === YBA: ТП + Сброс 1,000,000 + Автотрейд (GUI) ===
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local VIM = game:GetService("VirtualInputManager")
+local player = Players.LocalPlayer
+
+if CoreGui:FindFirstChild("YBAFaceDrop") then
+    CoreGui.YBAFaceDrop:Destroy()
+end
+
+-- === GUI ===
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "YBAFaceDrop"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 240, 0, 170)
+Frame.Position = UDim2.new(0, 50, 0, 100)
+Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Frame.BorderSizePixel = 2
+Frame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -30, 0, 25)
+Title.Text = "  YBA FaceDrop + Trade"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 13
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.BorderSizePixel = 0
+Title.Parent = Frame
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0, 30, 0, 25)
+ToggleBtn.Position = UDim2.new(1, -30, 0, 0)
+ToggleBtn.Text = "_"
+ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.TextSize = 16
+ToggleBtn.BorderSizePixel = 0
+ToggleBtn.Parent = Frame
+
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, 0, 1, -25)
+Content.Position = UDim2.new(0, 0, 0, 25)
+Content.BackgroundTransparency = 1
+Content.Parent = Frame
+
+-- Поле ника
+local NameInput = Instance.new("TextBox")
+NameInput.Size = UDim2.new(0, 200, 0, 30)
+NameInput.Position = UDim2.new(0, 20, 0, 10)
+NameInput.PlaceholderText = "Ник (или первые буквы)"
+NameInput.Text = ""
+NameInput.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+NameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+NameInput.Font = Enum.Font.SourceSans
+NameInput.TextSize = 14
+NameInput.ClearTextOnFocus = false
+NameInput.Parent = Content
+
+-- Кнопка СТАРТ
+local StartBtn = Instance.new("TextButton")
+StartBtn.Size = UDim2.new(0, 200, 0, 35)
+StartBtn.Position = UDim2.new(0, 20, 0, 50)
+StartBtn.Text = "СТАРТ (ТП + СБРОС + ТРЕЙД)"
+StartBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 70)
+StartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+StartBtn.Font = Enum.Font.SourceSansBold
+StartBtn.TextSize = 12
+StartBtn.Parent = Content
+
+-- Кнопка только ТРЕЙД
+local TradeBtn = Instance.new("TextButton")
+TradeBtn.Size = UDim2.new(0, 200, 0, 30)
+TradeBtn.Position = UDim2.new(0, 20, 0, 90)
+TradeBtn.Text = "ТОЛЬКО ТРЕЙД"
+TradeBtn.BackgroundColor3 = Color3.fromRGB(30, 100, 180)
+TradeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+TradeBtn.Font = Enum.Font.SourceSansBold
+TradeBtn.TextSize = 12
+TradeBtn.Parent = Content
+
+-- Статус
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -20, 0, 30)
+StatusLabel.Position = UDim2.new(0, 10, 0, 125)
+StatusLabel.Text = "Готов"
+StatusLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.TextSize = 11
+StatusLabel.TextWrapped = true
+StatusLabel.TextYAlignment = Enum.TextYAlignment.Top
+StatusLabel.Parent = Content
+
+-- === СВОРАЧИВАНИЕ ===
+local isMinimized = false
+ToggleBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        Content.Visible = false
+        Frame.Size = UDim2.new(0, 240, 0, 25)
+        ToggleBtn.Text = "▢"
+    else
+        Content.Visible = true
+        Frame.Size = UDim2.new(0, 240, 0, 170)
+        ToggleBtn.Text = "_"
+    end
+end)
+
+local function setStatus(text, color)
+    task.spawn(function()
+        StatusLabel.Text = text
+        StatusLabel.TextColor3 = color or Color3.fromRGB(180, 180, 180)
+    end)
+end
+
+-- === ПОИСК ИГРОКА ===
+local function findPlayer(query)
+    query = query:lower()
+    if query == "" then return nil end
+    
+    local bestMatch = nil
+    local bestPriority = 999
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == player then continue end
+        
+        local name = p.Name:lower()
+        local display = p.DisplayName:lower()
+        local priority = 999
+        
+        if name == query then priority = 1
+        elseif name:sub(1, #query) == query then priority = 2
+        elseif display:sub(1, #query) == query then priority = 3
+        elseif name:find(query, 1, true) then priority = 4
+        elseif display:find(query, 1, true) then priority = 5
+        end
+        
+        if priority < bestPriority then
+            bestPriority = priority
+            bestMatch = p
+        end
+    end
+    
+    return bestMatch, bestPriority
+end
+
+-- === ПОСТЕПЕННЫЙ ТП ===
+local function smoothTeleport(targetPlayer)
+    local targetChar = targetPlayer.Character
+    local myChar = player.Character
+    if not targetChar or not myChar then return false end
+    
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not targetRoot or not myRoot then return false end
+    
+    local STEP_SIZE = 30
+    local STEP_DELAY = 0.05
+    local maxIterations = 200
+    local iterations = 0
+    
+    while iterations < maxIterations do
+        iterations = iterations + 1
+        
+        if not targetRoot.Parent or not myRoot.Parent then
+            return false
+        end
+        
+        local currentTargetPos = targetRoot.Position + (targetRoot.CFrame.LookVector * 3.5)
+        local myPos = myRoot.Position
+        local distance = (currentTargetPos - myPos).Magnitude
+        
+        if distance <= STEP_SIZE then
+            myRoot.CFrame = CFrame.lookAt(currentTargetPos, targetRoot.Position)
+            return true
+        end
+        
+        local direction = (currentTargetPos - myPos).Unit
+        local newPos = myPos + (direction * STEP_SIZE)
+        
+        myRoot.CFrame = CFrame.lookAt(newPos, targetRoot.Position)
+        task.wait(STEP_DELAY)
+    end
+    
+    return false
+end
+
+-- === СБРОС ДЕНЕГ ===
+local function dropMoney(amount)
+    local hud = player.PlayerGui:FindFirstChild("HUD")
+    if not hud then return false end
+    local main = hud:FindFirstChild("Main")
+    if not main then return false end
+    local dropFrame = main:FindFirstChild("DropMoney")
+    if not dropFrame then return false end
+    
+    dropFrame.Visible = true
+    task.wait(0.3)
+    
+    local dropInput = dropFrame:FindFirstChild("DropAmount")
+                   or dropFrame:FindFirstChildOfClass("TextBox")
+    if not dropInput then return false end
+    
+    dropInput.Visible = true
+    task.wait(0.2)
+    dropInput:CaptureFocus()
+    task.wait(0.2)
+    
+    dropInput.Text = ""
+    task.wait(0.1)
+    
+    local str = tostring(amount)
+    for i = 1, #str do
+        dropInput.Text = str:sub(1, i)
+        task.wait(0.02)
+    end
+    
+    task.wait(0.3)
+    
+    VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+    task.wait(0.1)
+    VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+    task.wait(0.5)
+    
+    dropFrame.Visible = false
+    return true
+end
+
+-- === АВТОТРЕЙД ===
+local function initiateTrade(targetPlayer)
+    -- Находим RemoteFunction
+    local living = workspace:WaitForChild("Living", 5)
+    if not living then return false end
+    
+    local myFolder = living:FindFirstChild(player.Name)
+    if not myFolder then return false end
+    
+    local remote = myFolder:FindFirstChild("RemoteFunction")
+    if not remote then return false end
+    
+    -- Отправляем трейд
+    local ok, err = pcall(function()
+        remote:InvokeServer("InitiateCosmeticTrade", targetPlayer.Name)
+    end)
+    
+    return ok
+end
+
+-- === ОСНОВНАЯ ЛОГИКА ===
+local function run(fullCycle)
+    local query = NameInput.Text:gsub("^%s*(.-)%s*$", "%1")
+    
+    if query == "" then
+        setStatus("❌ Введи ник!", Color3.fromRGB(255, 75, 75))
+        return
+    end
+    
+    setStatus("🔍 Ищу '" .. query .. "'...", Color3.fromRGB(255, 200, 75))
+    
+    local targetPlayer, priority = findPlayer(query)
+    
+    if not targetPlayer then
+        setStatus("❌ Игрок не найден", Color3.fromRGB(255, 75, 75))
+        return
+    end
+    
+    setStatus("✅ Найден: " .. targetPlayer.Name, Color3.fromRGB(75, 255, 75))
+    task.wait(0.3)
+    
+    -- ТП + СБРОС (только если fullCycle)
+    if fullCycle then
+        setStatus("⏳ ТП рывками...", Color3.fromRGB(255, 200, 75))
+        local ok = smoothTeleport(targetPlayer)
+        if not ok then
+            setStatus("❌ Ошибка ТП", Color3.fromRGB(255, 75, 75))
+            return
+        end
+        
+        task.wait(0.3)
+        
+        setStatus("⏳ Сброс 1,000,000...", Color3.fromRGB(255, 200, 75))
+        local dropOk = dropMoney(1000000)
+        if not dropOk then
+            setStatus("⚠️ Ошибка сброса, продолжаю...", Color3.fromRGB(255, 200, 75))
+        end
+        
+        task.wait(0.5)
+    end
+    
+    -- АВТОТРЕЙД
+    setStatus("⏳ Отправляю трейд " .. targetPlayer.Name .. "...", Color3.fromRGB(255, 200, 75))
+    local tradeOk = initiateTrade(targetPlayer)
+    
+    if tradeOk then
+        setStatus("✅ Трейд отправлен! Жди ответа от " .. targetPlayer.Name, Color3.fromRGB(75, 255, 75))
+    else
+        setStatus("❌ Ошибка трейда", Color3.fromRGB(255, 75, 75))
+    end
+end
+
+-- Кнопка полного цикла
+StartBtn.MouseButton1Click:Connect(function()
+    task.spawn(function() run(true) end)
+end)
+
+-- Кнопка только трейда
+TradeBtn.MouseButton1Click:Connect(function()
+    task.spawn(function() run(false) end)
+end)
+
+print("✅ YBA FaceDrop + Trade загружен")
